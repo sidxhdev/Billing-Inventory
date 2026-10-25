@@ -2,5 +2,11 @@
   "installCommand": "npm ci",
   "buildCommand": "npm run build",
   "outputDirectory": "build",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://billing-inventory-api-4sxg.onrender.com/$1"
+    },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }

@@ -2,5 +2,11 @@
   "installCommand": "cd frontend && npm ci",
   "buildCommand": "cd frontend && npm run build",
   "outputDirectory": "frontend/build",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://billing-inventory-api-4sxg.onrender.com/$1"
+    },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }

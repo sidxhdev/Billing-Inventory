@@ -12,6 +12,8 @@ services:
         value: production
       - key: DATABASE_URL
         sync: false
+      - key: CORS_ORIGINS
+        value: "https://bill-inventory.sidxh.com"
       - key: CORS_ORIGIN_REGEX
         value: "https://.*\\.vercel\\.app"
       - key: REDIS_DISABLED
