@@ -7,6 +7,7 @@ Billing-Inventory is a full-stack billing and inventory management application w
 - **Frontend:** JavaScript, React, CSS
 - **Backend:** Python
 - **Database:** Relational database configured through environment variables
+- **Cache:** Redis for best-effort application caching
 - **Containerization:** Docker and Docker Compose
 - **Continuous integration:** Jenkins
 - **Deployment targets:** AWS EC2, AWS S3, and an AWS relational database service (RDBS/RDS)
@@ -17,6 +18,7 @@ Billing-Inventory is a full-stack billing and inventory management application w
 - Invoice management
 - PDF invoice generation
 - Backend API with automated tests
+- Redis-backed caching with graceful fallback when Redis is unavailable
 - React-based frontend
 - Environment-based configuration for local and production deployments
 
@@ -49,12 +51,14 @@ A typical production deployment can use the following architecture:
         | runtime          |              | documents/files  |
         +--------+---------+              +------------------+
                  |
-                 v
-        +------------------+
-        | AWS RDBS/RDS     |
-        | Relational data  |
-        | persistence      |
-        +------------------+
+        +--------+---------+
+        |                  |
+        v                  v
++------------------+ +------------------+
+| AWS RDBS/RDS     | | Redis            |
+| Relational data  | | Cache/session    |
+| persistence      | | acceleration     |
++------------------+ +------------------+
 ```
 
 > **Note:** AWS commonly calls its managed relational database service **Amazon RDS** (Relational Database Service). This document uses “RDBS/RDS” to match the requested terminology.
@@ -116,6 +120,42 @@ Use an AWS-managed relational database for persistent billing, invoice, and inve
 - Have automated backups and a defined retention period.
 - Be migrated using the repository's migration process before application rollout.
 
+### Redis caching
+
+Redis is an in-memory key-value store used by the backend as a fast, best-effort cache. In this project, `backend/cache.py` provides a small cache wrapper with JSON helpers:
+
+- `get_json(key)` retrieves and decodes a cached JSON value.
+- `set_json(key, value, ttl)` stores JSON with a configurable expiration time.
+- `delete(*keys)` removes one or more cached values.
+- Cache entries use `CACHE_TTL` by default, which is set to `60` seconds in `.env.example`.
+
+Redis is intentionally non-critical to application availability. If Redis is disabled, unavailable, or times out, the backend logs a warning and continues without cached data. The application should therefore always be able to retrieve authoritative data from the relational database.
+
+#### Redis configuration
+
+The root `.env.example` contains the following settings:
+
+```dotenv
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_DISABLED=0
+CACHE_TTL=60
+```
+
+For local Docker Compose development, the `redis` service is provided automatically:
+
+```yaml
+redis:
+  image: redis
+  restart: always
+```
+
+The backend connects to that service using `REDIS_HOST=redis` and `REDIS_PORT=6379`. When running the backend outside Docker, use `REDIS_HOST=localhost` unless Redis is hosted elsewhere.
+
+#### Redis production guidance
+
+For production, Redis may run on a dedicated EC2 instance, Amazon ElastiCache for Redis, or another managed Redis-compatible service. Use a private network, authentication/TLS where supported, monitoring, memory limits, and an eviction policy appropriate for cache data. Do not store irreplaceable business data only in Redis, and do not expose Redis directly to the public internet.
+
 ## Local development
 
 ### Prerequisites
@@ -124,6 +164,7 @@ Use an AWS-managed relational database for persistent billing, invoice, and inve
 - Node.js and npm
 - Git
 - Docker and Docker Compose (optional)
+- Redis, if running the backend without Docker
 
 ### Backend
 
@@ -152,7 +193,7 @@ npm start
 docker compose up --build
 ```
 
-Check the environment example files before starting the application:
+This starts the PostgreSQL database and Redis services along with the backend container. Check the environment example files before starting the application:
 
 - `.env.example`
 - `frontend/.env.example`
@@ -167,14 +208,14 @@ Billing-Inventory/
 ├── .env.example                  # Root environment variable template
 ├── .gitignore                    # Git exclusions
 ├── Jenkinsfile                   # Jenkins CI pipeline
-├── docker-compose.yml            # Local/container orchestration
+├── docker-compose.yml            # Local/container orchestration, PostgreSQL, and Redis
 ├── render.yaml                   # Render deployment configuration
 ├── requirements.txt              # Python runtime dependencies
 ├── vercel.json                   # Vercel configuration
 ├── backend/
 │   ├── Dockerfile                # Backend container image definition
 │   ├── __init__.py
-│   ├── cache.py                  # Caching helpers
+│   ├── cache.py                  # Redis cache wrapper and fallback behavior
 │   ├── config.py                 # Application configuration
 │   ├── database.py               # Database connection/session setup
 │   ├── main.py                   # Backend application entry point
@@ -227,15 +268,17 @@ npm ci
 npm run build
 ```
 
-Deployment stages for EC2, S3, and RDS can be added after these checks pass. Keep deployment credentials outside the repository and require approvals for production releases.
+Deployment stages for EC2, S3, RDS, and Redis can be added after these checks pass. Keep deployment credentials outside the repository and require approvals for production releases.
 
 ## Security checklist
 
 - Use HTTPS for all external traffic.
 - Keep `.env` files and credentials out of Git.
 - Use IAM roles and least-privilege policies.
-- Restrict EC2 and database security-group rules.
+- Restrict EC2, database, and Redis security-group rules.
 - Keep S3 buckets private by default.
+- Do not expose Redis to the public internet.
+- Use TLS/authentication for managed Redis in production where supported.
 - Rotate credentials and review Jenkins access regularly.
 - Run database migrations carefully and back up production data before schema changes.
 
