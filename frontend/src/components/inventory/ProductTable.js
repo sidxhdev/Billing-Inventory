@@ -1,4 +1,5 @@
 import React from "react";
+import CartQuantityControl from "../cart/CartQuantityControl";
 import { formatCurrency, formatNumber, stockStatusOf } from "../../utils/format";
 import StockStatusBadge from "./StockStatusBadge";
 
@@ -11,6 +12,8 @@ export default function ProductTable({
   onEdit,
   onDelete,
   onAddToCart,
+  onQuantityChange,
+  cart = [],
   editingId,
   loading,
 }) {
@@ -46,6 +49,9 @@ export default function ProductTable({
             ) : (
               products.map((product) => {
                 const status = stockStatusOf(product);
+                const cartQuantity =
+                  cart.find((item) => Number(item.product_id) === Number(product.id))
+                    ?.quantity || 0;
                 return (
                   <tr
                     key={product.id}
@@ -78,14 +84,23 @@ export default function ProductTable({
                     </td>
                     <td>
                       <div className="row-actions">
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-primary"
-                          onClick={() => onAddToCart(product)}
-                          disabled={product.quantity <= 0}
-                        >
-                          Add to cart
-                        </button>
+                        {cartQuantity > 0 ? (
+                          <CartQuantityControl
+                            product={product}
+                            quantity={cartQuantity}
+                            onChange={onQuantityChange}
+                            size="sm"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-primary"
+                            onClick={() => onAddToCart(product)}
+                            disabled={product.quantity <= 0}
+                          >
+                            Add to cart
+                          </button>
+                        )}
                         <button
                           type="button"
                           className="btn btn-sm btn-outline"

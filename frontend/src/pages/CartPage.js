@@ -238,7 +238,12 @@ export default function CartPage() {
 
       <div className="cart-layout">
         <div className="stack">
-          <ProductSelector products={products} cart={cart} onAdd={addToCart} />
+          <ProductSelector
+            products={products}
+            cart={cart}
+            onAdd={addToCart}
+            onQuantityChange={updateCartQuantity}
+          />
 
           <section className="card">
             <div className="card-head">

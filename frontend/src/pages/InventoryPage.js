@@ -14,7 +14,9 @@ export default function InventoryPage() {
     products,
     loadingProducts,
     productsError,
+    cart,
     addToCart,
+    updateCartQuantity,
     refreshProducts,
     showToast,
   } = useStore();
@@ -290,6 +292,8 @@ export default function InventoryPage() {
               onEdit={handleEdit}
               onDelete={setDeleteTarget}
               onAddToCart={addToCart}
+              onQuantityChange={updateCartQuantity}
+              cart={cart}
               editingId={editing?.id}
               loading={loadingProducts}
             />

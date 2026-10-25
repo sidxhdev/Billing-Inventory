@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from "react";
 import { formatCurrency, formatNumber, stockStatusOf } from "../../utils/format";
 import StockStatusBadge from "../inventory/StockStatusBadge";
+import CartQuantityControl from "./CartQuantityControl";
 
-export default function ProductSelector({ products, cart, onAdd }) {
+export default function ProductSelector({ products, cart, onAdd, onQuantityChange }) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
 
@@ -97,16 +98,24 @@ export default function ProductSelector({ products, cart, onAdd }) {
                   </div>
                   <div className="product-card-foot">
                     <span className="product-price">{formatCurrency(product.price)}</span>
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-primary"
-                      onClick={() => onAdd(product)}
-                      disabled={available <= 0}
-                    >
-                      {available <= 0 ? "No stock left" : "Add to cart"}
-                    </button>
+                    {inCart > 0 ? (
+                      <CartQuantityControl
+                        product={product}
+                        quantity={inCart}
+                        onChange={onQuantityChange}
+                        size="sm"
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-primary"
+                        onClick={() => onAdd(product)}
+                        disabled={available <= 0}
+                      >
+                        {available <= 0 ? "No stock left" : "Add to cart"}
+                      </button>
+                    )}
                   </div>
-                  {inCart > 0 && <span className="in-cart-note">{inCart} in cart</span>}
                 </article>
               );
             })}
