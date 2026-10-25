@@ -108,6 +108,65 @@ def test_duplicate_sku_is_rejected(client):
     assert "DUP-1" in response.json()["detail"]
 
 
+def test_bulk_create_products(client):
+    response = client.post(
+        "/products/bulk",
+        json=[
+            product_payload(name="Bulk One", sku="BULK-1", quantity=3),
+            product_payload(name="Bulk Two", sku="BULK-2"),
+        ],
+    )
+    assert response.status_code == 201, response.text
+    products = response.json()
+    assert [product["name"] for product in products] == ["Bulk One", "Bulk Two"]
+    assert [product["sku"] for product in products] == ["BULK-1", "BULK-2"]
+    assert products[0]["stock_status"] == "low_stock"
+    assert len(client.get("/products/").json()) == 2
+
+
+def test_bulk_create_handles_explicit_ids(client):
+    response = client.post(
+        "/products/bulk",
+        json=[
+            product_payload(id=101, name="Bulk Explicit 1", sku="BULK-101"),
+            product_payload(id=102, name="Bulk Explicit 2", sku="BULK-102"),
+            product_payload(name="Bulk Automatic", sku="BULK-AUTO"),
+        ],
+    )
+    assert response.status_code == 201, response.text
+    products = response.json()
+    assert [product["id"] for product in products] == [101, 102, 103]
+    assert products[2]["sku"] == "BULK-AUTO"
+
+    next_product = create_product(client, name="After Bulk")
+    assert next_product["id"] == 104
+
+
+def test_bulk_create_rejects_conflicts_and_empty_batches(client):
+    duplicate_sku = client.post(
+        "/products/bulk",
+        json=[
+            product_payload(name="Duplicate SKU 1", sku="BULK-DUP"),
+            product_payload(name="Duplicate SKU 2", sku="BULK-DUP"),
+        ],
+    )
+    assert duplicate_sku.status_code == 409
+    assert len(client.get("/products/").json()) == 0
+
+    duplicate_id = client.post(
+        "/products/bulk",
+        json=[
+            product_payload(id=201, name="Duplicate ID 1"),
+            product_payload(id=201, name="Duplicate ID 2"),
+        ],
+    )
+    assert duplicate_id.status_code == 409
+    assert len(client.get("/products/").json()) == 0
+
+    empty = client.post("/products/bulk", json=[])
+    assert empty.status_code == 400
+
+
 def test_checkout_creates_invoice_and_deducts_stock(client):
     product = create_product(client)
     response = client.post(

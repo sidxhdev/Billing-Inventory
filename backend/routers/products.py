@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..cache import cache
@@ -21,9 +22,12 @@ def _invalidate(product_id: Optional[int] = None) -> None:
         cache.delete(f"products:{product_id}")
 
 
-def _generate_sku(db: Session) -> str:
+def _generate_sku(db: Session, reserved: Optional[set[str]] = None) -> str:
+    reserved = reserved or set()
     for _ in range(20):
         candidate = f"SKU-{uuid4().hex[:8].upper()}"
+        if candidate in reserved:
+            continue
         if not db.query(Product.id).filter(Product.sku == candidate).first():
             return candidate
     raise HTTPException(
@@ -156,6 +160,106 @@ def get_inventory_stats(db: Session = Depends(get_db)):
         "stock_value": stock_value,
         "purchase_value": purchase_value,
     }
+
+
+@router.post("/bulk", response_model=list[ProductResponse], status_code=status.HTTP_201_CREATED)
+def add_products(payloads: list[ProductCreate], db: Session = Depends(get_db)):
+    if not payloads:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide at least one product",
+        )
+    if len(payloads) > 500:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A maximum of 500 products can be created at once",
+        )
+
+    prepared: list[tuple[Optional[int], dict]] = []
+    seen_ids: set[int] = set()
+    seen_skus: set[str] = set()
+
+    for payload in payloads:
+        data = payload.model_dump()
+        product_id = data.pop("id", None)
+        if product_id is not None:
+            if product_id in seen_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Product ID {product_id} is repeated in the request",
+                )
+            if db.query(Product.id).filter(Product.id == product_id).first():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Product with ID {product_id} already exists",
+                )
+            seen_ids.add(product_id)
+
+        sku = data.get("sku")
+        if sku:
+            if sku in seen_skus:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"A product with SKU {sku} is repeated in the request",
+                )
+            _assert_sku_available(db, sku)
+            seen_skus.add(sku)
+
+        prepared.append((product_id, data))
+
+    for _, data in prepared:
+        if not data.get("sku"):
+            sku = _generate_sku(db, seen_skus)
+            data["sku"] = sku
+            seen_skus.add(sku)
+
+    created: dict[int, Product] = {}
+    explicit_products: list[tuple[int, Product]] = []
+    try:
+        for index, (product_id, data) in enumerate(prepared):
+            if product_id is None:
+                continue
+            product = Product(id=product_id, **data)
+            db.add(product)
+            explicit_products.append((index, product))
+
+        if explicit_products:
+            db.flush()
+            if db.bind.dialect.name == "postgresql":
+                db.execute(
+                    text(
+                        "SELECT setval("
+                        "pg_get_serial_sequence('products', 'id'), "
+                        "(SELECT MAX(id) FROM products))"
+                    )
+                )
+
+        for index, (product_id, data) in enumerate(prepared):
+            if product_id is not None:
+                continue
+            product = Product(**data)
+            db.add(product)
+            created[index] = product
+
+        for index, product in explicit_products:
+            created[index] = product
+
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="One or more products conflict with existing records",
+        ) from exc
+
+    result = []
+    for index in range(len(prepared)):
+        product = created[index]
+        db.refresh(product)
+        result.append(product)
+
+    _invalidate()
+    return result
 
 
 @router.get("/{id}", response_model=ProductResponse)
