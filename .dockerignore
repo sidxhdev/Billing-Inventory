@@ -1,5 +1,8 @@
 .git
 .gitignore
+.env
+.env.*
+!.env.example
 myenv
 frontend/node_modules
 frontend/build

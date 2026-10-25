@@ -1,6 +1,16 @@
 name: fastapi
 
 services:
+  db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_DB: inventory_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
   redis:
     image: redis
     restart: always
@@ -13,6 +23,7 @@ services:
       - "8000:8000"
     depends_on:
       - redis
+      - db
     env_file:
       - .env
     environment:
@@ -20,3 +31,6 @@ services:
       - REDIS_PORT=6379
       - ENVIRONMENT=production
     restart: always
+
+volumes:
+  postgres_data:

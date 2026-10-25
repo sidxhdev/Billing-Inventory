@@ -1,0 +1,52 @@
+services:
+  - type: web
+    name: billing-inventory-api
+    runtime: docker
+    plan: free
+    # Choose a region close to your Neon project, for example: singapore
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ORIGIN_REGEX
+        value: "https://.*\\.vercel\\.app"
+      - key: REDIS_DISABLED
+        value: "1"
+      - key: DB_POOL_SIZE
+        value: "2"
+      - key: DB_MAX_OVERFLOW
+        value: "3"
+      - key: DB_POOL_RECYCLE
+        value: "300"
+      - key: BUSINESS_NAME
+        sync: false
+      - key: BUSINESS_ADDRESS
+        sync: false
+      - key: BUSINESS_PHONE
+        sync: false
+      - key: BUSINESS_EMAIL
+        sync: false
+      - key: BUSINESS_GSTIN
+        sync: false
+      - key: BUSINESS_STATE
+        sync: false
+      - key: GST_RATE
+        sync: false
+      - key: GST_MODE
+        value: cgst_sgst
+      - key: INVOICE_PREFIX
+        value: INV
+      - key: CURRENCY
+        value: INR
+      - key: PAYMENT_TERMS
+        sync: false
+      - key: THANK_YOU_MESSAGE
+        value: Thank you for your business.
+      - key: DEFAULT_LOW_STOCK_THRESHOLD
+        value: "5"
+      - key: CACHE_TTL
+        value: "60"

@@ -1,64 +1,40 @@
 pipeline {
     agent any
-    environment {
-        AWS_REGION = 'ap-south-1'
-        S3_BUCKET  = 'fastapi-inventory-frontend'
-        EC2_IP     = '43.205.124.153'
+    options {
+        timestamps()
     }
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'master',
-                    url: 'https://github.com/sidxhdev/fastapi'
+                checkout scm
             }
         }
-        stage('Run Backend') {
+        stage('Backend Tests') {
             steps {
-                withCredentials([
-                    string(credentialsId: 'DATABASE_URL', variable: 'DATABASE_URL')
-                ]) {
-                    sh '''
-                        echo "DATABASE_URL=$DATABASE_URL" > .env
-                        docker stop fastapi-backend || true
-                        docker rm fastapi-backend || true
-                        docker compose down || true
-                        docker compose up -d --build
-                    '''
-                }
+                sh 'python3 -m venv .venv'
+                sh '.venv/bin/pip install --upgrade pip'
+                sh '.venv/bin/pip install -r backend/requirements-dev.txt'
+                sh '.venv/bin/python -m pytest backend/tests -q'
             }
         }
-        stage('Build Frontend') {
+        stage('Frontend Build') {
             steps {
                 dir('frontend') {
-                    sh '''
-                        echo "REACT_APP_API_URL=https://api.inventory-manager.sidxh.com" > .env.production
-                        npm install
-                        npm run build
-                    '''
-                }
-            }
-        }
-        stage('Deploy Frontend to S3') {
-            steps {
-                withCredentials([
-                    string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
-                ]) {
-                    sh '''
-                        aws s3 sync frontend/build/ s3://$S3_BUCKET/ \
-                            --region $AWS_REGION \
-                            --delete
-                    '''
+                    sh 'npm ci'
+                    sh 'npm run build'
                 }
             }
         }
     }
     post {
+        always {
+            sh 'rm -rf .venv frontend/build || true'
+        }
         success {
-            echo "Live at: https://inventory-manager.sidxh.com"
+            echo 'CI checks passed. Render and Vercel deploy from Git.'
         }
         failure {
-            echo 'Pipeline failed'
+            echo 'CI checks failed.'
         }
     }
 }

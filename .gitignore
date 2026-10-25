@@ -15,6 +15,7 @@ venv/
 # Environment files
 .env
 .env.*
+!.env.example
 # .gitignore
 frontend/.env.local
 frontend/.env.production
@@ -62,3 +63,6 @@ node_modules/
 frontend/node_modules/
 frontend/build/
 frontend/dist/
+
+# Test databases
+backend/tests/test_inventory.db
